@@ -34,7 +34,14 @@ else
 fi
 
 GH_TOKEN="$(cat "$TOKEN_FILE")"
-REPO_URL="https://${GH_USER}:${GH_TOKEN}@github.com/${GH_USER}/issherlockslow.git"
+CLEAN_URL="https://github.com/${GH_USER}/issherlockslow.git"
+CREDENTIALS_FILE="$HOME/.gh_iomonitor_credentials"
+
+# Write a git-credentials file so the token isn't embedded in the URL
+# (URL-embedded tokens leak into git output and .git/config)
+umask 077
+printf "https://%s:%s@github.com\n" "$GH_USER" "$GH_TOKEN" > "$CREDENTIALS_FILE"
+chmod 600 "$CREDENTIALS_FILE"
 
 cd "$SCRIPT_DIR"
 
@@ -47,11 +54,12 @@ else
     git symbolic-ref HEAD refs/heads/main
     git config user.email "${USER}@sherlock.stanford.edu"
     git config user.name "${USER} (sherlock io poller)"
-    git remote add origin "$REPO_URL"
+    git remote add origin "$CLEAN_URL"
 fi
 
-# Keep remote URL current in case the token was rotated
-git remote set-url origin "$REPO_URL"
+# Ensure remote URL is clean (no embedded credentials) and credential helper points at our file
+git remote set-url origin "$CLEAN_URL"
+git config credential.helper "store --file=$CREDENTIALS_FILE"
 
 # Generate initial dashboard JSON
 python3 "$SCRIPT_DIR/aggregator.py" || true

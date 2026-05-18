@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=io_poll
 #SBATCH --partition=normal
+#SBATCH --qos=long
 #SBATCH --time=7-00:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=2G

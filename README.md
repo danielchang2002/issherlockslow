@@ -77,8 +77,9 @@ Several orders of magnitude below the noise floor of these filesystems.
 
 | setting | value | reason |
 |---|---|---|
-| `--partition` | `normal` | non-preemptible (won't randomly die); 7-day max walltime |
-| `--time` | `7-00:00:00` | the max on `normal` |
+| `--partition` | `normal` | non-preemptible (won't randomly die mid-incident) |
+| `--qos` | `long` | unlocks 7-day walltime on `normal` (default QoS caps at 48h) |
+| `--time` | `7-00:00:00` | max under `long` QoS |
 | `--cpus-per-task` | 1 | poller is single-threaded |
 | `--mem` | 2 GB | trivial; mostly for python + git |
 | `--signal=B:TERM@120` | TERM sent 2 min before walltime ends | gives us time to resubmit cleanly |

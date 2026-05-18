@@ -4,13 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Is Sherlock Slow?</title>
+<meta name="description" content="Polls write speed and file-creation rate across the Sherlock filesystems every 15 min — spot when a job's hogging IO.">
+
+<link rel="icon" type="image/png" href="snail.png">
+<link rel="apple-touch-icon" href="snail.png">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Is Sherlock Slow?">
+<meta property="og:description" content="Polls write speed and file-creation rate across the Sherlock filesystems every 15 min — spot when a job's hogging IO.">
+<meta property="og:image" content="https://danielchang2002.github.io/issherlockslow/snail.png">
+<meta property="og:url" content="https://danielchang2002.github.io/issherlockslow/">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Is Sherlock Slow?">
+<meta name="twitter:description" content="Polls write speed and file-creation rate across the Sherlock filesystems every 15 min — spot when a job's hogging IO.">
+<meta name="twitter:image" content="https://danielchang2002.github.io/issherlockslow/snail.png">
+
 <style>
   :root { color-scheme: light dark; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
          max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
   header { display: flex; justify-content: space-between; align-items: baseline;
            border-bottom: 1px solid #ccc; padding-bottom: .5rem; margin-bottom: 1rem; }
-  h1 { font-size: 1.5rem; margin: 0; }
+  h1 { font-size: 1.5rem; margin: 0; display: flex; align-items: center; gap: .5rem; }
+  h1 img.logo { height: 1.6em; width: auto; }
   .meta { font-size: .85rem; color: #666; }
   .chart-box { background: #fff; border: 1px solid #ddd; border-radius: 6px;
                padding: .75rem 1rem; margin-bottom: 1rem; }
@@ -30,7 +47,7 @@
 </head>
 <body>
 <header>
-  <h1>Is Sherlock Slow?</h1>
+  <h1><img class="logo" src="snail.png" alt=""> Is Sherlock Slow?</h1>
   <div class="meta">
     last poll: <span id="last-poll">—</span> &nbsp;|&nbsp;
     from <span id="host">—</span>

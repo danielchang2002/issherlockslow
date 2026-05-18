@@ -54,6 +54,8 @@ def main():
     total_seen = 0
     in_window = 0
 
+    latest_ts = ""
+    latest_host = ""
     if CSV_PATH.exists():
         with CSV_PATH.open() as f:
             for row in csv.reader(f):
@@ -74,6 +76,9 @@ def main():
                     continue
                 in_window += 1
                 hosts.add(parsed["host"])
+                if parsed["timestamp"] > latest_ts:
+                    latest_ts = parsed["timestamp"]
+                    latest_host = parsed["host"]
                 series[fs_]["timestamps"].append(parsed["timestamp"])
                 series[fs_]["write_MBps"].append(parsed["write_MBps"])
                 series[fs_]["meta_create_ops_s"].append(parsed["meta_create_ops_s"])
@@ -85,7 +90,8 @@ def main():
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "window_days": WINDOW_DAYS,
         "filesystems": FS_ORDER,
-        "hosts": sorted(hosts),
+        "host_count": len(hosts),
+        "last_host": latest_host,
         "rows_in_window": in_window,
         "rows_total": total_seen,
         "series": series,

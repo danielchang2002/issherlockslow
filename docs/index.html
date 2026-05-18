@@ -33,7 +33,8 @@
   <h1>Is Sherlock Slow?</h1>
   <div class="meta">
     last poll: <span id="last-poll">—</span> &nbsp;|&nbsp;
-    measured from: <span id="host">—</span>
+    from <span id="host">—</span>
+    <span id="hostcount" style="color:#999"></span>
   </div>
 </header>
 
@@ -134,7 +135,10 @@ async function load() {
   if (!res.ok) { document.body.innerHTML = "<p>Could not load data/latest.json.</p>"; return; }
   const d = await res.json();
   document.getElementById("window-days").textContent = d.window_days;
-  document.getElementById("host").textContent = d.hosts.join(", ") || "—";
+  document.getElementById("host").textContent = d.last_host || "—";
+  if (d.host_count > 1) {
+    document.getElementById("hostcount").textContent = ` (${d.host_count} nodes in window)`;
+  }
 
   // find the most recent timestamp across all series
   let latest = null;

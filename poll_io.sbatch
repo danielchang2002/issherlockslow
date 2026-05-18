@@ -1,23 +1,19 @@
 #!/bin/bash
 #SBATCH --job-name=io_poll
 #SBATCH --partition=normal
-#SBATCH --qos=long
-#SBATCH --time=7-00:00:00
+#SBATCH --time=00:10:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=2G
+#SBATCH --mem=1G
 #SBATCH --output=/oak/stanford/groups/brianhie/changdan/issherlockslow/logs/slurm-%j.out
-#SBATCH --signal=B:TERM@120
 #SBATCH --dependency=singleton
 #SBATCH --requeue
 
-# Polls every $INTERVAL seconds on a SLURM compute node. Self-resubmits
-# ~2 min before walltime expires, so the loop runs indefinitely without
-# manual intervention. --dependency=singleton prevents two copies from
-# ever running simultaneously.
+# Run ONE probe + push, then schedule the next invocation 15 min later.
+# Each job is short (~10 s); no sleep, so Sherlock's sleeper-job detector
+# is happy. The --dependency=singleton ensures we never run two at once.
 #
 # Submit once with:  sbatch poll_io.sbatch
-# Stop with:         scancel <jobid>   (then also kill the queued successor
-#                                       with squeue -u $USER -n io_poll)
+# Stop with:         scancel -n io_poll -u $USER
 
 set -u
 
@@ -25,25 +21,17 @@ BASE_DIR="/oak/stanford/groups/brianhie/changdan/issherlockslow"
 SCRIPT_PATH="$BASE_DIR/poll_io.sbatch"
 PROBE="$BASE_DIR/test_io3.sh"
 PUSH="$BASE_DIR/push_to_gh.sh"
-INTERVAL=900
+INTERVAL_MIN=15
 
-resubmit_and_exit() {
-    echo "[$(date -u +%FT%TZ)] caught TERM (walltime imminent or signal)"
-    if NEW_ID=$(sbatch --parsable "$SCRIPT_PATH" 2>&1); then
-        echo "[$(date -u +%FT%TZ)] queued successor job: $NEW_ID"
-    else
-        echo "[$(date -u +%FT%TZ)] ERROR: sbatch failed, no successor queued: $NEW_ID"
-    fi
-    exit 0
-}
-trap resubmit_and_exit TERM INT
+echo "[$(date -u +%FT%TZ)] io_poll run on $(hostname -s)"
 
-echo "[$(date -u +%FT%TZ)] io_poll started on $(hostname -s), interval=${INTERVAL}s, walltime=7d"
+bash "$PROBE" || echo "[$(date -u +%FT%TZ)] probe exited $?"
+bash "$PUSH"  || echo "[$(date -u +%FT%TZ)] push exited $?"
 
-while :; do
-    bash "$PROBE" || echo "[$(date -u +%FT%TZ)] probe exited $?"
-    bash "$PUSH"  || echo "[$(date -u +%FT%TZ)] push exited $?"
-    # sleep in background + wait, so SIGTERM interrupts immediately
-    sleep "$INTERVAL" &
-    wait $!
-done
+# Schedule the next run.
+if NEW_ID=$(sbatch --parsable --begin="now+${INTERVAL_MIN}minutes" "$SCRIPT_PATH" 2>&1); then
+    echo "[$(date -u +%FT%TZ)] next run queued: $NEW_ID (begins +${INTERVAL_MIN}m)"
+else
+    echo "[$(date -u +%FT%TZ)] ERROR: sbatch failed, chain BROKEN: $NEW_ID"
+    echo "[$(date -u +%FT%TZ)] you'll need to manually re-submit poll_io.sbatch"
+fi

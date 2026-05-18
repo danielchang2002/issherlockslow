@@ -46,10 +46,6 @@ def parse_row(row):
 
 
 def main():
-    if not CSV_PATH.exists():
-        print(f"no CSV at {CSV_PATH}", file=sys.stderr)
-        sys.exit(1)
-
     cutoff = datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS)
 
     series = {fs: {"timestamps": [], "write_MBps": [], "meta_create_ops_s": [], "errors": []}
@@ -58,30 +54,32 @@ def main():
     total_seen = 0
     in_window = 0
 
-    with CSV_PATH.open() as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if not row or row[0] == "timestamp":
-                continue
-            parsed = parse_row(row)
-            if parsed is None:
-                continue
-            total_seen += 1
-            try:
-                ts = datetime.strptime(parsed["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-            except ValueError:
-                continue
-            if ts < cutoff:
-                continue
-            fs_ = parsed["fs"]
-            if fs_ not in series:
-                continue
-            in_window += 1
-            hosts.add(parsed["host"])
-            series[fs_]["timestamps"].append(parsed["timestamp"])
-            series[fs_]["write_MBps"].append(parsed["write_MBps"])
-            series[fs_]["meta_create_ops_s"].append(parsed["meta_create_ops_s"])
-            series[fs_]["errors"].append(bool(parsed["error"]))
+    if CSV_PATH.exists():
+        with CSV_PATH.open() as f:
+            for row in csv.reader(f):
+                if not row or row[0] == "timestamp":
+                    continue
+                parsed = parse_row(row)
+                if parsed is None:
+                    continue
+                total_seen += 1
+                try:
+                    ts = datetime.strptime(parsed["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+                if ts < cutoff:
+                    continue
+                fs_ = parsed["fs"]
+                if fs_ not in series:
+                    continue
+                in_window += 1
+                hosts.add(parsed["host"])
+                series[fs_]["timestamps"].append(parsed["timestamp"])
+                series[fs_]["write_MBps"].append(parsed["write_MBps"])
+                series[fs_]["meta_create_ops_s"].append(parsed["meta_create_ops_s"])
+                series[fs_]["errors"].append(bool(parsed["error"]))
+    else:
+        print(f"no CSV yet at {CSV_PATH} — writing empty JSON", file=sys.stderr)
 
     out = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

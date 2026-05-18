@@ -75,25 +75,28 @@ Several orders of magnitude below the noise floor of these filesystems.
 
 ## SLURM details
 
+Each invocation runs **one** probe + push (~10 s total), then schedules its
+successor for 15 min later via `sbatch --begin=now+15minutes`. This avoids
+Sherlock's "sleeper job" detector (which rejects long-running jobs that just
+sleep between work) while keeping the polling cadence identical.
+
 | setting | value | reason |
 |---|---|---|
 | `--partition` | `normal` | non-preemptible (won't randomly die mid-incident) |
-| `--qos` | `long` | unlocks 7-day walltime on `normal` (default QoS caps at 48h) |
-| `--time` | `7-00:00:00` | max under `long` QoS |
+| `--time` | `00:10:00` | each invocation is short (~10 s); 10 min is a generous safety margin |
 | `--cpus-per-task` | 1 | poller is single-threaded |
-| `--mem` | 2 GB | trivial; mostly for python + git |
-| `--signal=B:TERM@120` | TERM sent 2 min before walltime ends | gives us time to resubmit cleanly |
-| `--dependency=singleton` | only one `io_poll` job runs at once | safety against double submission |
+| `--mem` | 1 GB | trivial; mostly for python + git |
+| `--dependency=singleton` | only one `io_poll` job runs at once | safety against accidental double submission |
 | `--requeue` | requeue on preempt | belt-and-suspenders (`normal` doesn't preempt) |
 
-**Auto-resubmit**: when the TERM trap fires (~120 s before walltime), the script
-runs `sbatch poll_io.sbatch` for the next 7-day window then exits. The successor
-is held by `dependency=singleton` until the current job finishes, then takes over.
+**Chain self-perpetuates**: each job submits the next with `--begin=now+15minutes`
+before exiting. If a single sbatch fails (transient SLURM hiccup), the chain
+breaks and an error is logged to `logs/slurm-*.out` — you'd have to manually
+re-submit to restart it.
 
 To stop the poller for good:
 ```bash
-scancel <current-jobid>
-squeue -u $USER -n io_poll      # check for queued successor and scancel it too
+scancel -n io_poll -u $USER     # cancels both running and queued successor
 ```
 
 ## Investigating a slowdown

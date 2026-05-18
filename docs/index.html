@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is Sherlock Slow?</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
+  header { display: flex; justify-content: space-between; align-items: baseline;
+           border-bottom: 1px solid #ccc; padding-bottom: .5rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.5rem; margin: 0; }
+  .meta { font-size: .85rem; color: #666; }
+  .chart-box { background: #fff; border: 1px solid #ddd; border-radius: 6px;
+               padding: .75rem 1rem; margin-bottom: 1rem; }
+  .chart-box h2 { font-size: 1rem; margin: 0 0 .25rem; }
+  .chart-box p.hint { font-size: .8rem; color: #666; margin: 0 0 .5rem; }
+  canvas { max-height: 320px; }
+  footer { font-size: .8rem; color: #666; margin-top: 1rem;
+           border-top: 1px solid #eee; padding-top: .5rem; }
+  .stale { color: #b40; font-weight: bold; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #ddd; }
+    .chart-box { background: #222; border-color: #333; }
+    header, footer { border-color: #333; }
+    .meta, .chart-box p.hint, footer { color: #999; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Is Sherlock Slow?</h1>
+  <div class="meta">
+    last poll: <span id="last-poll">—</span> &nbsp;|&nbsp;
+    measured from: <span id="host">—</span>
+  </div>
+</header>
+
+<div class="chart-box">
+  <h2>Bandwidth — sequential write throughput (MB/s)</h2>
+  <p class="hint">Higher = better. Sustained drops on one FS suggest someone is hammering its OST.</p>
+  <canvas id="chart-bw"></canvas>
+</div>
+
+<div class="chart-box">
+  <h2>Metadata — file creation rate (ops/s)</h2>
+  <p class="hint">Higher = better. Drops on one FS suggest MDS contention (many small-file ops by another user).</p>
+  <canvas id="chart-meta"></canvas>
+</div>
+
+<footer>
+  Single-node probe (one compute node, single-stream) every 15 min. Bandwidth and metadata numbers
+  are <em>relative</em> indicators of FS load — not absolute peak performance. Red dots mark probe
+  errors. Window: last <span id="window-days">7</span> days. Data refreshes when GitHub Pages re-serves.
+  See <a href="README.md">README</a> for caveats and methodology.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+const COLORS = {
+  HOME:           "#1f77b4",
+  GROUP_HOME:     "#ff7f0e",
+  SCRATCH:        "#2ca02c",
+  GROUP_SCRATCH:  "#d62728",
+  OAK:            "#9467bd",
+};
+
+function buildDatasets(series, metric) {
+  const datasets = [];
+  for (const fs of Object.keys(series)) {
+    const xs = series[fs].timestamps;
+    const ys = series[fs][metric];
+    const errs = series[fs].errors;
+    if (!xs || xs.length === 0) continue;
+    const points = xs.map((t, i) => ({ x: t, y: ys[i] }));
+    datasets.push({
+      label: fs,
+      data: points,
+      borderColor: COLORS[fs] || "#888",
+      backgroundColor: COLORS[fs] || "#888",
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.1,
+      spanGaps: true,
+    });
+    // overlay error markers (red dots) where errors[i] is true
+    const errPoints = xs.map((t, i) => errs[i] ? { x: t, y: ys[i] ?? 0 } : null).filter(Boolean);
+    if (errPoints.length) {
+      datasets.push({
+        label: fs + " errors",
+        data: errPoints,
+        borderColor: "transparent",
+        backgroundColor: "#d62728",
+        pointRadius: 4,
+        pointStyle: "rectRot",
+        showLine: false,
+        tooltip: { enabled: true },
+      });
+    }
+  }
+  return datasets;
+}
+
+function makeChart(canvasId, datasets, yLabel) {
+  return new Chart(document.getElementById(canvasId), {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "nearest", intersect: false },
+      scales: {
+        x: { type: "time", time: { tooltipFormat: "yyyy-MM-dd HH:mm 'UTC'" },
+             title: { display: true, text: "time (UTC)" } },
+        y: { title: { display: true, text: yLabel }, beginAtZero: true },
+      },
+      plugins: {
+        legend: { position: "top", labels: { filter: (item) => !item.text.endsWith("errors") } },
+        tooltip: { callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "n/a" : ctx.parsed.y.toFixed(1)}`
+        } },
+      },
+    },
+  });
+}
+
+async function load() {
+  // bust cache so we always see the latest commit on Pages
+  const res = await fetch("data/latest.json?t=" + Date.now());
+  if (!res.ok) { document.body.innerHTML = "<p>Could not load data/latest.json.</p>"; return; }
+  const d = await res.json();
+  document.getElementById("window-days").textContent = d.window_days;
+  document.getElementById("host").textContent = d.hosts.join(", ") || "—";
+
+  // find the most recent timestamp across all series
+  let latest = null;
+  for (const fs of d.filesystems) {
+    const ts = d.series[fs]?.timestamps;
+    if (ts && ts.length) {
+      const t = ts[ts.length - 1];
+      if (!latest || t > latest) latest = t;
+    }
+  }
+  const lp = document.getElementById("last-poll");
+  if (latest) {
+    lp.textContent = latest;
+    const ageMin = (Date.now() - new Date(latest).getTime()) / 60000;
+    if (ageMin > 30) { lp.classList.add("stale"); lp.textContent += ` (stale, ${ageMin.toFixed(0)} min ago)`; }
+  }
+
+  makeChart("chart-bw",   buildDatasets(d.series, "write_MBps"),         "write MB/s");
+  makeChart("chart-meta", buildDatasets(d.series, "meta_create_ops_s"),  "creates / s");
+}
+load();
+</script>
+</body>
+</html>

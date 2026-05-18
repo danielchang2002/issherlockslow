@@ -1,0 +1,13 @@
+# Authoritative archive — stays on OAK only
+logs/*.csv
+logs/*.out
+logs/slurm-*
+
+# Secrets
+*.token
+.gh_*
+
+# Temp
+*.tmp
+*.json.tmp
+.DS_Store
